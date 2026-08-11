@@ -1,17 +1,46 @@
 # Runtime dependencies. This is the file Wasmer Edge's autobuild reads to detect a Python
 # app and install into the wasm image, so it holds only what serving the site needs.
 # Test-only dependencies live in requirements-dev.txt.
+#
+# ---------------------------------------------------------------------------------------
+# READ THIS BEFORE BUMPING ANYTHING
+#
+# The build resolves dependencies TWICE: once against PyPI, and once against
+# pythonindex.wasix.org with --platform wasix_wasm32 --only-binary=:all:. The second pass
+# cannot build from source, so any package with a native extension is capped at whatever
+# version the WASIX index happens to carry. Versions available there as of 2026-08-11:
+#
+#   lxml               6.0.0             charset-normalizer  3.4.3
+#   pydantic-core      2.41.5            regex               2025.7.31
+#   jiter              0.10.0
+#
+# The four transitive natives are pinned explicitly so both passes agree; without the pins
+# the PyPI pass picks a newer version and the wasm pass fails with "No matching distribution".
+# A version bump that is fine on PyPI can therefore still break the deploy — check the index
+# first. Full suite (452 tests, incl. live extraction) passes on these versions.
+# ---------------------------------------------------------------------------------------
 
 fastapi==0.141.1
 uvicorn==0.52.1
 youtube-transcript-api==1.2.4
-trafilatura==2.2.0
 anthropic==0.121.0
 openai==2.53.0
 python-dotenv==1.2.2
 
-# 2.12.5 rather than 2.13.4: pydantic 2.13.x requires pydantic-core 2.46.x, and the WASIX
-# wheel index (pythonindex.wasix.org) tops out at pydantic-core 2.41.5 — the version
-# pydantic 2.12.5 pins. pydantic-core is a Rust extension, so there is no source fallback
-# on wasm32. Full suite passes on 2.12.5. See NOTES.md "Deploying to Wasmer Edge".
+# 2.0.0, not 2.2.0: trafilatura 2.1.0+ requires lxml>=6.1.1 and the WASIX index stops at
+# lxml 6.0.0. 2.0.0 is the newest release that accepts lxml>=5.3.0. This is what actually
+# failed the first deploy. Note 2.0.0 extracts marginally less text than 2.2.0 on the same
+# article (44,752 vs 45,102 chars on the Karpathy test URL) — see NOTES.md.
+trafilatura==2.0.0
+
+# pydantic 2.13.x requires pydantic-core 2.46.x; the WASIX index stops at 2.41.5, which is
+# what 2.12.5 pins. pydantic-core is Rust, so there is no source fallback on wasm32.
 pydantic==2.12.5
+
+# Transitive natives, pinned to the newest version the WASIX index carries. Nothing imports
+# these directly: lxml and charset-normalizer come via trafilatura, regex via dateparser
+# (via htmldate), jiter via the anthropic and openai SDKs.
+lxml==6.0.0
+charset-normalizer==3.4.3
+regex==2025.7.31
+jiter==0.10.0

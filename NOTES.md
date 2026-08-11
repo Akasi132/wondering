@@ -498,13 +498,13 @@ and there is no server-side progress to report, so anything more specific would 
 1. **Nothing has been deployed to Wasmer.** That needs a Wasmer account. Every claim below
    about Edge behaviour is inference from the docs and from `wasmer 7.2.1 --help`, not from a
    deploy. This is the same class of gap as the Anthropic backend above.
-2. **Which Python the deploy lands on is unresolved, and it matters.** The WASIX wheel index
-   ships `cp313` wheels, but `wasmer run wasmer/python` resolves to **Python 3.12.0**. The
-   registry lists a `wasmer/python` version `3.13.0`, yet `wasmer run wasmer/python@=3.13.0`
-   answers "not found". `.python-version` is set to `3.13` to match Wasmer's own FastAPI
-   example, and the autobuild pipeline is left to choose the runtime — but if it picks 3.12,
-   the `cp313` wheels for `pydantic-core`, `jiter`, `lxml`, and `charset-normalizer` do not
-   match the ABI and the install fails. **This is the most likely first failure.**
+2. ~~**Which Python the deploy lands on is unresolved, and it matters.**~~ **RESOLVED
+   2026-08-11 by a real build — and the prediction was wrong.** See "First deploy attempt"
+   below. Autobuild logged `detected Python version: 3.13`, used CPython 3.13.14, and pulled
+   `pydantic_core-2.41.5-cp313-cp313-wasix_wasm32.whl` and `jiter-0.10.0-cp313-...whl`
+   successfully. `.python-version` was honoured; the 3.12-vs-3.13 ABI mismatch predicted here
+   did not happen and `wasmer run` resolving to 3.12.0 locally turned out to say nothing about
+   what the build pipeline uses.
 3. **Request duration versus Edge's request timeout is unknown.** A cold `/ingest` took 30-90
    seconds in the live runs above. If Edge caps a request below that, every uncached path
    fails and the fix is the job queue already listed under v2 upgrades — not a config tweak.
@@ -547,6 +547,59 @@ and there is no server-side progress to report, so anything more specific would 
 
 `wasmer app secret create [name] [value] --app <APP>` was confirmed against `wasmer 7.2.1
 --help` before being written into the README, rather than recalled.
+
+### First deploy attempt — 2026-08-11, FAILED at build step 12/14
+
+The build ran from the GitHub connection. It failed, but not where this file predicted.
+
+```
+ERROR: Could not find a version that satisfies the requirement lxml>=6.1.1
+       (from trafilatura) (from versions: 6.0.0)
+ERROR: No matching distribution found for lxml>=6.1.1
+```
+
+**The mechanism, which is the useful part.** Autobuild resolves dependencies *twice*: step
+10/14 against PyPI for a normal environment, and step 12/14 against `pythonindex.wasix.org`
+with `--platform wasix_wasm32 --only-binary=:all:`. The first pass installed lxml 6.1.1
+happily. The second cannot build from source, so it is capped at whatever the WASIX index
+carries — lxml **6.0.0** — and `trafilatura==2.2.0` requires `lxml>=6.1.1`. The two passes
+disagreed and the wasm one lost.
+
+**Why this was missed.** The WASIX index was checked for *presence* of lxml before the first
+deploy, and it is there. What was never checked is the *constraint pointing at it*:
+trafilatura's requirement was recorded in an earlier draft of this file as "lxml>=5.3.0
+(probably)". That parenthetical was a guess, and guessing is exactly what Directive 1 forbids.
+Presence on the index is not enough — the dependent's floor has to be checked against the
+index's ceiling. Every native in the tree has now been checked that way:
+
+| package | WASIX index has | pinned to | pulled in by |
+|---|---|---|---|
+| lxml | 6.0.0 | 6.0.0 | trafilatura |
+| pydantic-core | 2.33.2, 2.41.5 | 2.41.5 (via pydantic 2.12.5) | pydantic |
+| charset-normalizer | 3.4.3 | 3.4.3 | trafilatura, requests |
+| regex | 2025.7.31 | 2025.7.31 | dateparser via htmldate |
+| jiter | 0.10.0 | 0.10.0 | anthropic, openai SDKs |
+
+**The fix: `trafilatura` 2.2.0 -> 2.0.0**, the newest release whose constraint is `lxml>=5.3.0`
+rather than `>=6.1.1` (2.1.0 already requires 6.1.1). The four transitive natives above are now
+pinned explicitly in `requirements.txt` so both resolution passes agree — without the pins the
+PyPI pass drifts to a newer version and the wasm pass fails the same way on a different
+package.
+
+**Verified after the change**, not assumed:
+
+- `pip check` reports no broken requirements on the pinned set.
+- `452 passed`, including the live-network extractor tests, so trafilatura 2.0.0's API surface
+  is confirmed by real calls rather than carried over from the 2.2.0 notes above.
+- One real behavioural difference: **2.0.0 extracts slightly less text than 2.2.0** from the
+  same article — 44,752 chars vs 45,102 on the Karpathy URL, about 0.8% less. Title, YouTube
+  path (18,710 chars, 35 anchors), and both failure paths are unchanged. Not enough to affect
+  a five-lesson path, but it is a real difference and the numbers recorded in "Confirmed API
+  surfaces" above were measured on 2.2.0.
+
+Still unproven after this: everything downstream of the build. No successful deploy yet, so
+the volume, the health check, the request-timeout question, and the site actually serving are
+all still open.
 
 ### One pre-existing risk that this change makes worse
 

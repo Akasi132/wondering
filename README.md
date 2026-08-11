@@ -64,9 +64,13 @@ Two things in this repo exist for that pipeline specifically:
 - **`main.py` re-exports the ASGI app**, so `main:app` resolves. A root `app.py` would be
   shadowed by the existing `app/` package, so that conventional spelling is unavailable here.
   `server.py` starts the same object explicitly if you would rather give a command.
-- **`pydantic` is pinned to 2.12.5, not 2.13.4.** pydantic 2.13 requires pydantic-core 2.46,
-  and the WASIX wheel index tops out at pydantic-core 2.41.5 — which is what 2.12.5 pins.
-  pydantic-core is Rust, so there is no source fallback on wasm32.
+- **Several dependencies are pinned down, not up.** The build resolves twice — once against
+  PyPI, once against the WASIX index with `--only-binary=:all:` — and the second pass cannot
+  build native extensions from source. So anything with a C or Rust extension is capped at
+  whatever that index carries: `pydantic` at 2.12.5 (pydantic-core 2.41.5), `trafilatura` at
+  2.0.0 (lxml 6.0.0), plus explicit pins on `lxml`, `charset-normalizer`, `regex`, and `jiter`
+  so both passes agree. `requirements.txt` explains each one. **A bump that is fine on PyPI can
+  still break the deploy** — check <https://pythonindex.wasix.org> first.
 
 ### From your machine
 
