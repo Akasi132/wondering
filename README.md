@@ -49,6 +49,9 @@ Run `python main.py --list-models` before trusting a model ID — slugs differ b
 | `GET /examples/{chemistry,article}` | a pre-built path from `fixtures/`, no API key needed |
 | `POST /ingest` | `{"url": "..."}` → a `Path` of five lessons |
 
+`POST /ingest` status codes: `400` the source could not be read, `422` no captions or a URL the
+validator refused, `503` YouTube blocked *this server* (see below), `502` the model call failed.
+
 `POST /ingest` is synchronous and a cold request takes as long as the model call — 30 to 90
 seconds in the runs recorded in `NOTES.md`. The front end shows an elapsed clock rather than a
 fake progress bar. A job queue is the v2 upgrade.
@@ -89,6 +92,26 @@ Set `owner:` in `app.yaml` to your Wasmer username first, or pass `--owner`.
 3. Pick the repo and the branch to deploy to production (usually `main`).
 
 Pushes to that branch deploy from then on. `app.yaml` is read from the repo on each deploy.
+
+### YouTube does not work on a hosted instance without a proxy
+
+YouTube blocks transcript requests from datacenter IP ranges. A video that extracts fine from
+your laptop returns `RequestBlocked` from Edge, and the site answers **503** with "YouTube is
+blocking this server" — the link was never the problem. **Articles are unaffected**, and so are
+the two saved examples.
+
+To make YouTube work, point the instance at a *residential* proxy (datacenter proxies are
+blocked for the same reason the host is):
+
+```bash
+wasmer app secret create --app wondering WEBSHARE_PROXY_USERNAME ...
+wasmer app secret create --app wondering WEBSHARE_PROXY_PASSWORD ...
+# or, for any other provider:
+wasmer app secret create --app wondering YOUTUBE_PROXY_HTTPS_URL https://user:pw@host:port
+```
+
+Webshare takes precedence if both are set. Unset means no proxy, which is what you want
+locally. This has been tested with stubs but never against a real proxy — see `NOTES.md`.
 
 ### Secrets
 

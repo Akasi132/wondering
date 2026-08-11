@@ -86,7 +86,9 @@
 
   <!-- ─── failure ────────────────────────────────────────────────────────── -->
   <section class="failure" id="failure" hidden aria-labelledby="failure-heading">
-    <h2 id="failure-heading" class="failure__head"></h2>
+    <!-- tabindex so fail() can move focus here: without it the .focus() call is a no-op and a
+         screen-reader user is left at the submit button with no idea the view changed. -->
+    <h2 id="failure-heading" class="failure__head" tabindex="-1"></h2>
     <p class="failure__body"></p>
     <button type="button" class="btn btn--go" id="retry">Try another link</button>
   </section>

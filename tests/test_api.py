@@ -18,7 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import api, cache
-from app.extract import ExtractionError, NoCaptionsError
+from app.extract import BlockedError, ExtractionError, NoCaptionsError
 from app.llm import LLMError
 from app.models import Document, Exercise, Lesson, Path
 
@@ -269,6 +269,38 @@ def test_extraction_error_maps_to_400(client, monkeypatch):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "could not fetch page"
+
+
+def test_blocked_error_maps_to_503_not_400(client, monkeypatch):
+    """A blocked host is not a bad request.
+
+    Observed live on the first Wasmer deploy: YouTube returns RequestBlocked to datacenter
+    IPs for videos that extract fine from a residential connection. Returning 4xx would tell
+    the caller to fix a URL that was never wrong.
+    """
+    monkeypatch.setattr(api, "route", raising(BlockedError("YouTube is blocking this server")))
+    monkeypatch.setattr(api, "build_path", raising(AssertionError("build_path must not run")))
+
+    response = client.post("/ingest", json={"url": "https://www.youtube.com/watch?v=3RwUIP9pMSo"})
+
+    assert response.status_code == 503
+    assert response.status_code != 400
+    assert response.json()["detail"] == "YouTube is blocking this server"
+
+
+def test_blocked_handler_ordering_beats_the_extraction_handler(client, monkeypatch):
+    """Same load-bearing ordering as NoCaptionsError: BlockedError subclasses ExtractionError.
+
+    If the `except ExtractionError` clause came first it would swallow this and return 400.
+    """
+    assert issubclass(BlockedError, ExtractionError)
+
+    monkeypatch.setattr(api, "route", raising(BlockedError("blocked")))
+    monkeypatch.setattr(api, "build_path", raising(AssertionError("build_path must not run")))
+
+    response = client.post("/ingest", json={"url": "https://youtu.be/abcdefghijk"})
+
+    assert response.status_code == 503
 
 
 def test_no_captions_handler_ordering_beats_the_extraction_handler(client, monkeypatch):

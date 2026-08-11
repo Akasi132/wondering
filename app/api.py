@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError, field_validator
 
 from app import cache
-from app.extract import ExtractionError, NoCaptionsError
+from app.extract import BlockedError, ExtractionError, NoCaptionsError
 from app.llm import LLMError
 from app.models import Path
 from app.pathbuilder import build_path
@@ -176,6 +176,11 @@ def ingest(request: IngestRequest) -> Path:
     except NoCaptionsError as exc:
         # Checked before ExtractionError: NoCaptionsError subclasses it.
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except BlockedError as exc:
+        # Also subclasses ExtractionError, so it has to be caught before it. 503 rather than
+        # 400 because the caller's URL was valid and there is nothing for them to correct —
+        # this host is the thing YouTube refused. 4xx here would blame the wrong party.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ExtractionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -71,6 +71,12 @@ function explain(status, detail) {
       body: `${detail} Videos need captions turned on. Articles need to be a page, not a PDF or a paywall.`,
     };
   }
+  if (status === 503) {
+    return {
+      head: "YouTube is blocking this server",
+      body: `${detail} YouTube refuses transcript requests from datacenter addresses, which is where this site runs. Article links are unaffected — or run the project locally, where your own connection fetches the transcript.`,
+    };
+  }
   if (status === 400) {
     return { head: "Couldn't read that page", body: detail };
   }

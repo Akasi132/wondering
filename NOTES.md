@@ -601,6 +601,64 @@ Still unproven after this: everything downstream of the build. No successful dep
 the volume, the health check, the request-timeout question, and the site actually serving are
 all still open.
 
+### Second deploy — the build succeeded, and then YouTube blocked the host
+
+The dependency pins fixed the build. The first real YouTube URL submitted to the live site
+came back as:
+
+```
+Could not retrieve the transcript for https://www.youtube.com/watch?v=3RwUIP9pMSo
+(RequestBlocked)
+```
+
+**This is the failure the error mapping was written for**, and the mapping did its job — it
+surfaced as a clean error rather than an unhandled 500, exactly as the note under "Confirmed
+API surfaces" predicted ("YouTube blocking a datacenter IP — the most likely production
+failure"). Prediction confirmed this time.
+
+Isolated rather than assumed: the same URL was run through `route()` from a residential
+connection and extracted fine — `'Calculus 2 Final Exam Review -'`, 31,004 chars, 96 anchors.
+So the video is fine and the block is on the host, not the link.
+
+**Two things were wrong in how that was handled.**
+
+1. **The status code blamed the caller.** `RequestBlocked` came back as a plain
+   `ExtractionError` -> HTTP 400 -> "Couldn't read that page". A 4xx says *you* sent something
+   bad. The URL was perfect; the server is the thing YouTube refused, and no amount of trying
+   different links will help. Now a distinct `BlockedError` maps to **503**, and the page says
+   "YouTube is blocking this server", that the link is fine, and what still works (articles, or
+   running it locally). Ordering is load-bearing — `BlockedError` subclasses `ExtractionError`,
+   so it is caught first, same as `NoCaptionsError`; there is a test pinning that.
+2. **There was no way to fix it without editing code.** `extract._proxy_config()` now reads
+   the proxy settings the library supports, so an instance can be pointed at a residential
+   proxy without a redeploy:
+
+   | env | effect |
+   |---|---|
+   | `WEBSHARE_PROXY_USERNAME` + `WEBSHARE_PROXY_PASSWORD` | `WebshareProxyConfig` (takes precedence) |
+   | `YOUTUBE_PROXY_HTTPS_URL` / `YOUTUBE_PROXY_HTTP_URL` | `GenericProxyConfig` |
+   | none set | no proxy — correct for local use and the CLI |
+
+   Signatures confirmed by `inspect.signature` against the installed 1.2.4, not recalled:
+   `YouTubeTranscriptApi(proxy_config=None, http_client=None)`,
+   `GenericProxyConfig(http_url=None, https_url=None)`,
+   `WebshareProxyConfig(proxy_username, proxy_password, filter_ip_locations=None, ...)`.
+   `IpBlocked` subclasses `RequestBlocked`, so one clause catches both; `PoTokenRequired` does
+   *not*, so it stays a 400 rather than claiming a block that did not happen.
+
+**Verified:** `467 passed` (15 new — 13 in `tests/test_proxy.py` covering proxy selection,
+blank/partial credentials, the exception mapping, and that the config actually reaches the
+client; 2 in `tests/test_api.py` for the 503 and the handler ordering). The 503 page was
+rendered in the browser against a stubbed response and reads correctly.
+
+**Not verified:** no proxy has actually been bought or configured, so the Webshare and generic
+paths have never made a real proxied request. The code path is tested with stubs; the
+end-to-end "does a residential proxy actually get past YouTube" question is open.
+
+Worth saying plainly: **YouTube is broken on the deployed site until a proxy is configured.**
+Articles work. The two saved examples work. That is a product limitation of hosting on any
+cloud provider, not a bug in this code.
+
 ### One pre-existing risk that this change makes worse
 
 Assumption 9 above — DNS resolution inside a Pydantic validator on a synchronous endpoint —

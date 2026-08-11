@@ -18,6 +18,16 @@ description: Paste a link, get a five-lesson path with diagrams, questions, and 
 #   wasmer app secret create --app wondering ANTHROPIC_API_KEY sk-ant-...
 #   wasmer app secret create --app wondering OPENAI_API_KEY   nvapi-...
 #
+# YouTube blocks datacenter IP ranges, so transcript fetches from Edge return 503 unless they
+# go through a residential proxy. Article URLs are unaffected. To make YouTube work here, the
+# proxy credentials are secrets too:
+#
+#   wasmer app secret create --app wondering WEBSHARE_PROXY_USERNAME ...
+#   wasmer app secret create --app wondering WEBSHARE_PROXY_PASSWORD ...
+#
+# (or YOUTUBE_PROXY_HTTPS_URL for another provider). Buy *residential* proxies, not datacenter
+# ones — those are blocked for exactly the same reason this host is.
+#
 # Only non-secret configuration belongs below.
 env:
   # anthropic (default) or openai. `openai` covers any OpenAI-compatible Chat Completions
