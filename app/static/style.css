@@ -1,0 +1,665 @@
+/* Wondering — "signage outside, book inside".
+   The chrome (route spine, station markers, labels, quiz) is wayfinding: wide grotesque,
+   flat colour, mono for anything traceable. The lesson prose is a book page: serif, one
+   generous measure. The route spine is the one loud element; everything else stays quiet. */
+
+/* ─── tokens ──────────────────────────────────────────────────────────────── */
+
+:root {
+  --ground:   #e8e6df;
+  --ground-2: #f3f2ed;
+  --ink:      #16221e;
+  --ink-2:    #46534b;
+  --muted:    #6b776f;
+  --route:    #1f4d3d;
+  --signal:   #2b3fd6;
+  --rule:     #cecbc1;
+  --on-signal: #ffffff; /* text sitting on --signal; flips in dark, where --signal is light */
+  --bad:      #9c3418;
+  --shadow:   0 1px 0 rgb(22 34 30 / 0.06), 0 12px 32px -24px rgb(22 34 30 / 0.5);
+
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --read:    "Newsreader", Georgia, "Times New Roman", serif;
+  --mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+
+  --col:   68rem;   /* page column */
+  --spine: 3.25rem; /* width of the route gutter */
+  --step:  clamp(2.5rem, 5vw, 4.5rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:   #12181a;
+    --ground-2: #1a2225;
+    --ink:      #e4e7e0;
+    --ink-2:    #b3bdb5;
+    --muted:    #8b978e;
+    --route:    #63ae90;
+    --signal:   #93a2ff;
+    --rule:     #2d3739;
+    --on-signal: #101a2e;
+    --bad:      #e08768;
+    --shadow:   0 1px 0 rgb(0 0 0 / 0.3), 0 12px 32px -24px rgb(0 0 0 / 0.9);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--display);
+  font-variation-settings: "wdth" 100, "wght" 400;
+  font-size: 16px;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+}
+
+/* ─── shared bits ─────────────────────────────────────────────────────────── */
+
+.skip {
+  position: absolute; left: -9999px; top: 0; z-index: 20;
+  background: var(--signal); color: #fff;
+  padding: 0.6rem 1rem; font-size: 0.8rem; letter-spacing: 0.04em;
+}
+.skip:focus { left: 0; }
+
+/* ─── the route ───────────────────────────────────────────────────────────── */
+
+/* The signature, in its horizontal form: one line, five stops. It states the promise on
+   the landing page, stands in for the path while one is being built, and turns vertical
+   as the spine that the finished lessons hang off. */
+.route {
+  position: relative;
+  width: min(30rem, 100%);
+  height: 2px;
+  background: var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.route__dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid var(--route);
+  border-radius: 50%;
+  background: var(--ground);
+}
+.route--live .route__dot { border-color: var(--rule); }
+.route__survey {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: -0.275rem;
+  border-radius: 50%;
+  background: var(--signal);
+}
+
+:where(a, button, input, summary):focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.eyebrow {
+  margin: 0 0 0.9rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.btn {
+  font-family: var(--display);
+  font-variation-settings: "wdth" 108, "wght" 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--ground);
+  padding: 0.72rem 1.25rem;
+  cursor: pointer;
+  transition: transform 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn[disabled] { opacity: 0.45; cursor: progress; transform: none; }
+
+.btn--ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule);
+  padding: 0.5rem 0.9rem;
+}
+.btn--ghost:hover { border-color: var(--ink); }
+
+.btn--go { background: var(--signal); border-color: var(--signal); color: var(--on-signal); }
+
+.btn--check {
+  background: transparent;
+  color: var(--signal);
+  border-color: var(--signal);
+  padding: 0.6rem 1.1rem;
+}
+.btn--check:hover { background: var(--signal); color: var(--on-signal); }
+
+.status {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+  min-height: 1px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.status:empty { padding: 0; }
+
+/* ─── top bar ─────────────────────────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 1.4rem 1.25rem;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--route);
+  text-decoration: none;
+  font-variation-settings: "wdth" 118, "wght" 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+.wordmark__mark { width: 1.15rem; height: 1.15rem; }
+
+/* ─── intake ──────────────────────────────────────────────────────────────── */
+
+.intake {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: clamp(2rem, 7vw, 5.5rem) 1.25rem 4rem;
+}
+
+.intake h1 {
+  margin: 0 0 1.1rem;
+  font-variation-settings: "wdth" 116, "wght" 700;
+  font-size: clamp(2.6rem, 8vw, 5.25rem);
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  max-width: 16ch;
+}
+/* Its own line, always: the phrase names the thing the route below it draws. */
+.intake h1 em {
+  display: block;
+  font-style: normal;
+  color: var(--route);
+}
+
+.intake .route { margin: 2rem 0 2.4rem; }
+
+.lede {
+  margin: 0 0 2.6rem;
+  font-family: var(--read);
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  line-height: 1.5;
+  color: var(--ink-2);
+  max-width: 54ch;
+}
+
+.intake__form { max-width: 44rem; }
+
+.intake__label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+
+.intake__row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+.intake__row input {
+  flex: 1 1 20rem;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--ground-2);
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.72rem 0.9rem;
+}
+.intake__row input::placeholder { color: var(--muted); }
+.intake__row input:focus-visible { border-color: var(--signal); outline-offset: 1px; }
+
+.intake__hint {
+  margin: 0.8rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 46ch;
+}
+
+.samples { margin-top: 3rem; }
+.samples__label {
+  margin: 0 0 0.8rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.samples__row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-family: var(--display);
+  font-variation-settings: "wdth" 100, "wght" 500;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--ground-2);
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s ease;
+}
+.chip:hover { border-color: var(--route); }
+.chip__kind {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ground-2);
+  background: var(--route);
+  padding: 0.16rem 0.4rem;
+  border-radius: 2px;
+}
+
+/* ─── working ─────────────────────────────────────────────────────────────── */
+
+.working {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: clamp(3rem, 10vw, 7rem) 1.25rem;
+  text-align: center;
+}
+
+.working .route { margin: 0 auto 3rem; }
+
+.working h2 {
+  margin: 0 0 0.7rem;
+  font-variation-settings: "wdth" 112, "wght" 600;
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  letter-spacing: -0.02em;
+}
+.working__meta {
+  margin: 0 0 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.working__clock {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* ─── failure ─────────────────────────────────────────────────────────────── */
+
+.failure {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: clamp(3rem, 9vw, 6rem) 1.25rem;
+}
+.failure__head {
+  margin: 0 0 0.8rem;
+  font-variation-settings: "wdth" 112, "wght" 600;
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  letter-spacing: -0.02em;
+  color: var(--bad);
+}
+.failure__body {
+  margin: 0 0 1.8rem;
+  font-family: var(--read);
+  font-size: 1.1rem;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* ─── the path ────────────────────────────────────────────────────────────── */
+
+.path {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: clamp(1.5rem, 5vw, 3rem) 1.25rem 2rem;
+}
+
+.path__head { padding-left: var(--spine); margin-bottom: var(--step); }
+
+.path__head h2 {
+  margin: 0 0 0.7rem;
+  font-family: var(--read);
+  font-weight: 600;
+  font-size: clamp(1.7rem, 4.5vw, 2.6rem);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  max-width: 24ch;
+}
+
+.path__source { margin: 0 0 0.5rem; }
+.path__source a {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.path__progress {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--route);
+}
+
+.stations { list-style: none; margin: 0; padding: 0; }
+
+.station { display: grid; grid-template-columns: var(--spine) minmax(0, 1fr); }
+
+/* the route: a continuous line down the gutter, one filled ring per stop */
+.station__spine { position: relative; }
+.station__spine::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: calc(0.75rem - 1px);
+  width: 2px;
+  background: var(--rule);
+}
+.station:last-child .station__spine::before { bottom: auto; height: 2.1rem; }
+
+.station__dot {
+  position: absolute;
+  top: 1.35rem; left: 0;
+  width: 1.5rem; height: 1.5rem;
+  border: 2.5px solid var(--route);
+  border-radius: 50%;
+  background: var(--ground);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.station.is-done .station__dot {
+  background: var(--route);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--route) 18%, transparent);
+}
+
+.station__card { padding: 0 0 var(--step); min-width: 0; }
+
+.station__head { margin-bottom: 1.5rem; }
+
+.station__index {
+  margin: 0 0 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.station__title {
+  margin: 0 0 0.9rem;
+  font-variation-settings: "wdth" 110, "wght" 700;
+  font-size: clamp(1.35rem, 3.2vw, 1.95rem);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  max-width: 22ch;
+}
+
+/* the trail marker: what in the source this stop came from */
+.station__cite {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  border-left: 2px solid var(--route);
+  padding: 0.2rem 0 0.2rem 0.75rem;
+  max-width: 60ch;
+}
+.station__cite-label {
+  font-size: 0.63rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* diagram */
+.diagram {
+  margin: 0 0 1.8rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  background: var(--ground-2);
+  overflow: hidden;
+}
+.diagram__canvas {
+  padding: 1.5rem 1rem;
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
+}
+.diagram__canvas svg { max-width: 100%; height: auto; }
+
+.diagram__cap { border-top: 1.5px solid var(--rule); }
+.diagram__cap summary {
+  cursor: pointer;
+  padding: 0.6rem 1rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.diagram__src {
+  margin: 0;
+  padding: 0 1rem 1rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* the read */
+.prose {
+  font-family: var(--read);
+  font-size: 1.16rem;
+  line-height: 1.62;
+  color: var(--ink);
+  max-width: 62ch;
+  margin-bottom: 2rem;
+}
+.prose p { margin: 0 0 1.1em; }
+.prose p:last-child { margin-bottom: 0; }
+
+/* quiz */
+.quiz fieldset {
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  padding: 1.3rem 1.4rem 1.5rem;
+  margin: 0;
+  max-width: 46rem;
+  background: var(--ground-2);
+}
+
+.quiz__legend {
+  padding: 0 0.5rem;
+  margin-left: -0.5rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--route);
+}
+
+.quiz__q {
+  margin: 0 0 1.1rem;
+  font-family: var(--read);
+  font-size: 1.08rem;
+  line-height: 1.45;
+}
+
+.quiz__options { display: grid; gap: 0.5rem; margin-bottom: 1.2rem; }
+
+.opt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  padding: 0.7rem 0.85rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  background: var(--ground);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  transition: border-color 0.12s ease;
+}
+.opt:hover { border-color: var(--signal); }
+.opt input { margin: 0.28rem 0 0; accent-color: var(--signal); }
+.opt:has(input:focus-visible) { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+.quiz.is-answered .opt { cursor: default; }
+.quiz.is-answered .opt:hover { border-color: var(--rule); }
+.quiz.is-answered .opt.is-correct {
+  border-color: var(--route);
+  background: color-mix(in srgb, var(--route) 12%, var(--ground));
+}
+.quiz.is-answered .opt.is-wrong {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 10%, var(--ground));
+}
+
+.quiz__verdict {
+  margin: 1rem 0 0;
+  font-family: var(--read);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.quiz__verdict:empty { margin: 0; }
+.quiz__verdict b {
+  font-family: var(--display);
+  font-variation-settings: "wdth" 108, "wght" 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+.quiz__verdict.is-right b { color: var(--route); }
+.quiz__verdict.is-wrong b { color: var(--bad); }
+
+/* ─── footer ──────────────────────────────────────────────────────────────── */
+
+.foot {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+  border-top: 1.5px solid var(--rule);
+  margin-top: 3rem;
+}
+.foot p {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+/* ─── the one orchestrated moment: the route draws in, stop by stop ───────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* landing: the line draws left to right, each stop landing as the line reaches it */
+  .route--draw {
+    animation: draw 0.9s cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+  .route--draw .route__dot {
+    animation: land 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  }
+  .route--draw .route__dot:nth-child(1) { animation-delay: 0.10s; }
+  .route--draw .route__dot:nth-child(2) { animation-delay: 0.28s; }
+  .route--draw .route__dot:nth-child(3) { animation-delay: 0.46s; }
+  .route--draw .route__dot:nth-child(4) { animation-delay: 0.64s; }
+  .route--draw .route__dot:nth-child(5) { animation-delay: 0.82s; }
+
+  /* Negative vertical insets on purpose: the element's own box is the 2px line, so a plain
+     inset(0) would clip the station dots that overhang it. */
+  @keyframes draw {
+    from { clip-path: inset(-1rem 100% -1rem 0); }
+    to   { clip-path: inset(-1rem 0 -1rem 0); }
+  }
+  @keyframes land {
+    from { opacity: 0; transform: scale(0.2); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* waiting: a surveyor's mark running the route until the server answers */
+  .route--live .route__survey {
+    animation: survey 2.8s ease-in-out infinite;
+  }
+  @keyframes survey {
+    0%, 100% { left: 0; }
+    50%      { left: calc(100% - 0.55rem); }
+  }
+
+  .station {
+    animation: arrive 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 90ms);
+  }
+  @keyframes arrive {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── narrow ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 34rem) {
+  :root { --spine: 2.25rem; }
+  .station__dot { width: 1.1rem; height: 1.1rem; top: 1.15rem; }
+  .station__spine::before { left: calc(0.55rem - 1px); }
+  .station:last-child .station__spine::before { height: 1.7rem; }
+  .quiz fieldset { padding: 1.1rem 1rem 1.2rem; }
+  .btn--go { width: 100%; }
+}

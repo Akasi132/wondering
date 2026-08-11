@@ -1,0 +1,96 @@
+{
+  "document_title": "GENERAL CHEMISTRY explained in 19 Minutes",
+  "source_url": "https://www.youtube.com/watch?v=5iTOphGnCtg",
+  "lessons": [
+    {
+      "order": 1,
+      "title": "Atoms and the Periodic Table",
+      "explanation": "Everything is made of atoms. Yes, even you. Atoms consist of a core and some electrons. The core is made of protons and neutrons, and depending on the number of protons, you get different elements. Atoms have multiple electron \"shells\", and the electrons in the outermost shell are called \"valence electrons\". Most of chemistry is really just the behaviour of these electrons. Every element is listed in the periodic table. All elements in the same column or \"group\" have the same number of valence electrons. For the main groups, the number of valence electrons is just the group number from 1 to 8. Elements in the same row or \"period\" have the same number of shells. Also, the mass gets bigger from left to right, as each element gains a proton, an electron and some neutrons.",
+      "mermaid": "graph TD; A[Atom] --> B[Core: protons + neutrons]; A --> C[Electrons in shells]; C --> D[Valence electrons: outermost shell]; D --> E[Periodic Table organized by groups and periods];",
+      "exercise": {
+        "question": "What determines the number of valence electrons for main group elements?",
+        "options": [
+          "The number of neutrons",
+          "The group number from 1 to 8",
+          "The atomic mass",
+          "The period number from 1 to 7"
+        ],
+        "answer_index": 1,
+        "why": "The source states that for main groups, valence electrons equal the group number from 1 to 8."
+      },
+      "citation": "[00:32] Most of chemistry is really just the behaviour"
+    },
+    {
+      "order": 2,
+      "title": "Ions, Bonds, and Electronegativity",
+      "explanation": "Atoms try to reach a state of lower energy, just like a ball rolling downhill. The state of lowest potential energy is having a full outer shell of electrons, which is most often eight. Noble gases already have a full outer shell, so they don't react much. If two atoms can achieve a full shell by sharing electrons, they will naturally do so. This sharing is called a \"covalent bond\". Bonds are caused by the positively charged nucleus tugging on electrons of another atom. The strength of this pull is called \"electronegativity\", which increases from bottom left to top right in the periodic table, so Fluorine has the strongest pull. If the electronegativity difference is bigger than about 1.7, you get an ionic bond, like in Sodium Chloride, where sodium loses an electron to chlorine.",
+      "mermaid": "graph TD; A[Atoms seek full outer shell] --> B[Covalent bond: share electrons]; A --> C[Ionic bond: transfer electrons if electronegativity difference > 1.7]; A --> D[Metallic bond: delocalized electrons]; B --> E[Nonpolar if difference < 0.5]; B --> F[Polar covalent if 0.5 to 1.7];",
+      "exercise": {
+        "question": "What kind of bond forms between sodium and chlorine in table salt?",
+        "options": [
+          "Covalent bond",
+          "Hydrogen bond",
+          "Ionic bond",
+          "Metallic bond"
+        ],
+        "answer_index": 2,
+        "why": "The source states sodium and chlorine form an ionic bond because the electronegativity difference is bigger than 1.7."
+      },
+      "citation": "[03:44] In the periodic table, the electronegativity"
+    },
+    {
+      "order": 3,
+      "title": "States of Matter and Intermolecular Forces",
+      "explanation": "There are three main states of matter: solid, liquid and gas. Solids are tightly packed in fixed structures where particles can only wiggle. In liquids, particles move freely but stay in a fixed volume. In gases, particles have enough energy to fill all available volume. Temperature is the average kinetic energy of particles, and entropy is the amount of disorder. Strong bonds like ionic bonds lead to high melting points, whereas water, held by hydrogen bonds, is liquid at room temperature. Permanent dipole molecules can interact via intermolecular forces (IMFs). Hydrogen bonds form when hydrogen bonds to fluorine, oxygen, or nitrogen. Even nonpolar molecules experience Van der Waals forces from momentary dipoles. Water dissolves polar substances but not nonpolar ones, which is why oil and water don't mix.",
+      "mermaid": "graph TD; A[States of matter] --> B[Solid: fixed structure]; A --> C[Liquid: fixed volume]; A --> D[Gas: fills volume]; E[IMFs] --> F[Hydrogen bonds]; E --> G[Van der Waals forces]; E --> H[Dipole interactions];",
+      "exercise": {
+        "question": "Why does water not dissolve oil?",
+        "options": [
+          "Because water has metallic bonds",
+          "Because oil has a higher electronegativity",
+          "Because water is acidic",
+          "Because water is polar and oil is nonpolar"
+        ],
+        "answer_index": 3,
+        "why": "The source explains water is polar while fat molecules are nonpolar, so water cannot dissolve nonpolar molecules."
+      },
+      "citation": "[05:50] or IMFs."
+    },
+    {
+      "order": 4,
+      "title": "Reactions, Stoichiometry, and pH",
+      "explanation": "Chemical reactions happen mainly to decrease energy and reach a more stable state. There are four main types: synthesis, decomposition, single replacement, and double replacement. Reactions follow stoichiometric ratios based on conservation of mass. A mole is just an amount of something, kind of like \"a dozen\", based on atomic mass in grams. All reactions need activation energy, which catalysts reduce. Exothermic reactions release heat; endothermic reactions absorb it. Gibbs Free Energy combines enthalpy and entropy: if delta G is less than zero, the reaction is spontaneous. At equilibrium, delta G equals zero. According to Brondsted-Lowry, an acid donates protons while a base accepts them. pH measures hydronium ion concentration as the negative log, where each step is a 10x change. Pure water has pH 7.",
+      "mermaid": "graph TD; A[Chemical reaction] --> B[Synthesis]; A --> C[Decomposition]; A --> D[Single replacement]; A --> E[Double replacement]; F[Spontaneity] --> G[Exergonic: delta G < 0]; F --> H[Endergonic: delta G > 0]; F --> I[Equilibrium: delta G = 0]; J[pH scale] --> K[Acidic: pH < 7]; J --> L[Neutral: pH = 7]; J --> M[Basic: pH > 7];",
+      "exercise": {
+        "question": "What does pH measure?",
+        "options": [
+          "The negative log of hydronium ion concentration",
+          "The electronegativity of a solvent",
+          "The temperature of a solution",
+          "The positive log of hydroxide concentration"
+        ],
+        "answer_index": 0,
+        "why": "The source defines pH as the negative log of the hydronium concentration."
+      },
+      "citation": "[13:54] So, to measure the strength of an acid we"
+    },
+    {
+      "order": 5,
+      "title": "Quantum Numbers and Electron Configuration",
+      "explanation": "Electrons don't actually orbit in circles. All electrons inside an atom are described by four quantum numbers: n, l, ml, and ms. N corresponds to shells. Within shells we have subshells with multiple orbitals, which are three dimensional regions in space where electrons could be. These exist thanks to schrodinger's equation, which gives a probabilistic wave function you can imagine as a cloud. L describes the shape and ml the orientation of orbitals. There are four subshells called s, p, d and f. The number of orbitals increases by two for every bigger subshell, starting at just one for s. The last quantum number ms describes spin with two values. Pauli said two electrons can never have the same quantum numbers, so every orbital can hold a maximum of 2 electrons with opposite spin. The Aufbauprinciple gives the order to fill subshells.",
+      "mermaid": "graph TD; A[Four quantum numbers] --> B[n: shell]; A --> C[l: subshell shape]; A --> D[ml: orientation]; A --> E[ms: spin]; F[Subshells] --> G[s: 2 electrons]; F --> H[p: 6 electrons]; F --> I[d: 10 electrons]; F --> J[f: 14 electrons]; K[Aufbauprinciple] --> L[Fill subshells in diagonal order];",
+      "exercise": {
+        "question": "How many electrons can the d subshell hold?",
+        "options": [
+          "14",
+          "2",
+          "6",
+          "10"
+        ],
+        "answer_index": 3,
+        "why": "The source states the d subshell can hold 10 electrons."
+      },
+      "citation": "[17:01] just one for s."
+    }
+  ]
+}

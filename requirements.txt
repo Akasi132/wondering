@@ -1,0 +1,17 @@
+# Runtime dependencies. This is the file Wasmer Edge's autobuild reads to detect a Python
+# app and install into the wasm image, so it holds only what serving the site needs.
+# Test-only dependencies live in requirements-dev.txt.
+
+fastapi==0.141.1
+uvicorn==0.52.1
+youtube-transcript-api==1.2.4
+trafilatura==2.2.0
+anthropic==0.121.0
+openai==2.53.0
+python-dotenv==1.2.2
+
+# 2.12.5 rather than 2.13.4: pydantic 2.13.x requires pydantic-core 2.46.x, and the WASIX
+# wheel index (pythonindex.wasix.org) tops out at pydantic-core 2.41.5 — the version
+# pydantic 2.12.5 pins. pydantic-core is a Rust extension, so there is no source fallback
+# on wasm32. Full suite passes on 2.12.5. See NOTES.md "Deploying to Wasmer Edge".
+pydantic==2.12.5

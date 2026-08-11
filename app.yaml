@@ -1,0 +1,48 @@
+# Wasmer Edge app configuration.
+#
+# Wasmer's autobuild detects the FastAPI app from requirements.txt and packages it; this file
+# only supplies the settings autobuild cannot infer. Deploying with the CLI (`wasmer deploy`)
+# or connecting this repo in the Wasmer dashboard both read it.
+#
+# Before the first deploy, set `owner` to your Wasmer username or namespace.
+
+kind: wasmer.io/App.v0
+name: wondering
+description: Paste a link, get a five-lesson path with diagrams, questions, and citations.
+
+# owner: your-wasmer-username
+
+# Secrets are NOT set here — this file is in git. Set them on the app instead, so they are
+# stored encrypted rather than committed:
+#
+#   wasmer app secret create --app wondering ANTHROPIC_API_KEY sk-ant-...
+#   wasmer app secret create --app wondering OPENAI_API_KEY   nvapi-...
+#
+# Only non-secret configuration belongs below.
+env:
+  # anthropic (default) or openai. `openai` covers any OpenAI-compatible Chat Completions
+  # endpoint — NVIDIA, OpenAI itself, or a local vLLM/Ollama.
+  LLM_PROVIDER: openai
+  OPENAI_BASE_URL: https://integrate.api.nvidia.com/v1
+  # Verified live against NVIDIA on 2026-08-11; run `python main.py --list-models` to confirm
+  # your endpoint still serves this slug before trusting it.
+  LLM_MODEL: minimaxai/minimax-m3
+  LLM_JSON_MODE: auto
+  # The generated-path cache. Points into the volume below, because the packaged application
+  # directory is not a durable place to write.
+  WONDERING_CACHE_DIR: /data/cache
+
+# Without this, every request regenerates from scratch and pays the model cost again.
+volumes:
+  - name: data
+    mount: /data
+
+health_checks:
+  - http:
+      method: get
+      path: /health
+      interval: 30s
+      timeout: 10s
+      unhealthy_threshold: 2
+      healthy_threshold: 1
+      expected_status_codes: [200]

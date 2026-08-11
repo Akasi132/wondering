@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wondering — turn a link into five stops</title>
+<meta name="description" content="Paste an article or a captioned YouTube video. Wondering reads the source and lays out five lessons, each traceable to the line it came from.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='none' stroke='%231F4D3D' stroke-width='4'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%232B3FD6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400..600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <a class="wordmark" href="/">
+    <svg class="wordmark__mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="4.5" fill="currentColor"/></svg>
+    Wondering
+  </a>
+  <button type="button" class="btn btn--ghost" id="reset" hidden>Start a new path</button>
+</header>
+
+<main id="main">
+
+  <!-- ─── intake ─────────────────────────────────────────────────────────── -->
+  <section class="intake" id="intake" aria-labelledby="intake-heading">
+    <p class="eyebrow">A route through anything you saved</p>
+    <h1 id="intake-heading">Turn a link into <em>five stops.</em></h1>
+
+    <div class="route route--draw" aria-hidden="true">
+      <span class="route__dot"></span><span class="route__dot"></span><span class="route__dot"></span><span class="route__dot"></span><span class="route__dot"></span>
+    </div>
+
+    <p class="lede">
+      Paste an article or a captioned YouTube video. Wondering reads the source and lays out
+      five lessons &mdash; each with a diagram, a short read, a question, and the line in the
+      source it came from.
+    </p>
+
+    <form class="intake__form" id="form">
+      <label class="intake__label" for="url">Article or YouTube URL</label>
+      <div class="intake__row">
+        <input
+          id="url" name="url" type="url" inputmode="url" required
+          placeholder="https://"
+          autocomplete="url" spellcheck="false"
+          aria-describedby="url-hint">
+        <button class="btn btn--go" type="submit" id="submit">Build the path</button>
+      </div>
+      <p class="intake__hint" id="url-hint">
+        Videos need captions. Long sources are trimmed to the first 60,000 characters.
+      </p>
+    </form>
+
+    <div class="samples">
+      <p class="samples__label" id="samples-label">Or open one that&rsquo;s already built</p>
+      <div class="samples__row" role="group" aria-labelledby="samples-label">
+        <button type="button" class="chip" data-example="chemistry">
+          <span class="chip__kind">Video</span>
+          General Chemistry in 19 Minutes
+        </button>
+        <button type="button" class="chip" data-example="article">
+          <span class="chip__kind">Article</span>
+          A fuel-cell breakthrough for data centers
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── working ────────────────────────────────────────────────────────── -->
+  <section class="working" id="working" hidden aria-labelledby="working-heading">
+    <div class="route route--live" aria-hidden="true">
+      <span class="route__dot"></span><span class="route__dot"></span><span class="route__dot"></span><span class="route__dot"></span><span class="route__dot"></span>
+      <span class="route__survey"></span>
+    </div>
+    <h2 id="working-heading">Building your path</h2>
+    <p class="working__meta">
+      <span id="working-source"></span>
+    </p>
+    <p class="working__clock"><span id="clock">0:00</span> elapsed &middot; usually 30&ndash;90 seconds</p>
+  </section>
+
+  <!-- ─── failure ────────────────────────────────────────────────────────── -->
+  <section class="failure" id="failure" hidden aria-labelledby="failure-heading">
+    <h2 id="failure-heading" class="failure__head"></h2>
+    <p class="failure__body"></p>
+    <button type="button" class="btn btn--go" id="retry">Try another link</button>
+  </section>
+
+  <!-- ─── the path ───────────────────────────────────────────────────────── -->
+  <section class="path" id="path" hidden aria-labelledby="path-heading">
+    <div class="path__head">
+      <p class="eyebrow">Five stops</p>
+      <h2 id="path-heading"></h2>
+      <p class="path__source"><a id="path-source-link" href="#" rel="noopener noreferrer"></a></p>
+      <p class="path__progress" id="progress">0 of 5 answered</p>
+    </div>
+    <ol class="stations" id="stations"></ol>
+  </section>
+
+  <p class="status" id="status" role="status" aria-live="polite"></p>
+</main>
+
+<footer class="foot">
+  <p>Every lesson carries the line it came from. Nothing here is checked for accuracy beyond that.</p>
+</footer>
+
+<!-- one station, cloned per lesson -->
+<template id="tpl-station">
+  <li class="station">
+    <div class="station__spine" aria-hidden="true"><span class="station__dot"></span></div>
+    <article class="station__card">
+      <header class="station__head">
+        <p class="station__index" aria-hidden="true"></p>
+        <h3 class="station__title"></h3>
+        <p class="station__cite">
+          <span class="station__cite-label">From the source</span>
+          <span class="station__cite-text"></span>
+        </p>
+      </header>
+
+      <figure class="diagram">
+        <div class="diagram__canvas"></div>
+        <figcaption class="diagram__cap">
+          <details>
+            <summary>Diagram source</summary>
+            <pre class="diagram__src"></pre>
+          </details>
+        </figcaption>
+      </figure>
+
+      <div class="prose"></div>
+
+      <form class="quiz">
+        <fieldset>
+          <legend class="quiz__legend">Check yourself</legend>
+          <p class="quiz__q"></p>
+          <div class="quiz__options"></div>
+          <button class="btn btn--check" type="submit">Check answer</button>
+          <p class="quiz__verdict" role="status" aria-live="polite"></p>
+        </fieldset>
+      </form>
+    </article>
+  </li>
+</template>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
