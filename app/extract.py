@@ -12,9 +12,13 @@ import json
 import logging
 import os
 import re
+import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeout
 from urllib.parse import parse_qs, urlparse
 
+import requests
 import trafilatura
 from youtube_transcript_api import (
     CouldNotRetrieveTranscript,
@@ -25,6 +29,8 @@ from youtube_transcript_api import (
     YouTubeTranscriptApi,
 )
 from youtube_transcript_api.proxies import GenericProxyConfig, WebshareProxyConfig
+
+from app import proxypool
 
 logger = logging.getLogger(__name__)
 
@@ -227,13 +233,155 @@ def _proxy_config() -> GenericProxyConfig | WebshareProxyConfig | None:
     return None
 
 
+class _TimeoutSession(requests.Session):
+    """A Session with a default timeout.
+
+    requests has no global timeout and youtube-transcript-api never passes one, so a proxy
+    that accepts a connection and then goes quiet would hang the request forever. That is the
+    normal behaviour of a dead free proxy, and rotation is worthless without a bound on it.
+    """
+
+    def __init__(self, timeout: float) -> None:
+        super().__init__()
+        self._timeout = timeout
+
+    def request(self, *args, **kwargs):  # type: ignore[override]
+        kwargs.setdefault("timeout", self._timeout)
+        return super().request(*args, **kwargs)
+
+
+def _fetch_transcript(video_id: str, languages: tuple[str, ...]):
+    """Fetch a transcript, rotating through proxies only if the host itself is blocked.
+
+    Order of preference:
+      1. An explicitly configured proxy (Webshare or generic) — the operator said so.
+      2. A direct connection. This is what works from a residential network, and costs one
+         request to find out.
+      3. If and only if direct came back RequestBlocked *and* rotation is enabled, work
+         through the pool.
+
+    Rotation is deliberately not tried for any other failure. A missing transcript or an
+    unavailable video is a fact about the video, and no proxy changes it — burning eight
+    proxies to be told the same thing eight times would just make the endpoint slower.
+
+    A new YouTubeTranscriptApi (and Session) per attempt, because the library documents the
+    class as not thread-safe and a fresh session also prevents a keep-alive connection to a
+    dead proxy from being reused.
+    """
+    explicit = _proxy_config()
+    if explicit is not None:
+        return YouTubeTranscriptApi(
+            proxy_config=explicit, http_client=_TimeoutSession(proxypool.attempt_timeout())
+        ).fetch(video_id, languages=languages)
+
+    try:
+        return YouTubeTranscriptApi(
+            http_client=_TimeoutSession(proxypool.attempt_timeout())
+        ).fetch(video_id, languages=languages)
+    except RequestBlocked:
+        if not proxypool.enabled():
+            raise
+        logger.info("Direct fetch blocked for %s; rotating through the proxy pool", video_id)
+
+    return _fetch_through_pool(video_id, languages)
+
+
+def _attempt(address: str, video_id: str, languages: tuple[str, ...], timeout: float):
+    """One proxy, one try. Returns a tagged outcome and never raises.
+
+    Tagged rather than raising because this runs inside a worker thread, where an exception
+    would only surface when the future is read and would lose the distinction between
+    "this proxy is dead" and "this video has no captions".
+    """
+    config = GenericProxyConfig(http_url=f"http://{address}", https_url=f"http://{address}")
+    try:
+        fetched = YouTubeTranscriptApi(
+            proxy_config=config, http_client=_TimeoutSession(timeout)
+        ).fetch(video_id, languages=languages)
+    except (TranscriptsDisabled, NoTranscriptFound, VideoUnavailable) as exc:
+        # Checked before the broad clause: these subclass the same base as RequestBlocked.
+        # YouTube answered — the video is the problem, and no other proxy will differ.
+        return "definitive", exc
+    except RequestBlocked as exc:
+        return "blocked", exc
+    except CouldNotRetrieveTranscript as exc:
+        return "dead", exc
+    except Exception as exc:
+        # Refused, timed out, TLS failure, truncated response. Expected: most free proxies
+        # fail here, so it is not worth a warning.
+        return "dead", exc
+    return "ok", fetched
+
+
+def _fetch_through_pool(video_id: str, languages: tuple[str, ...]):
+    """Try pooled proxies in parallel, first success wins.
+
+    Parallel because the attempts are independent and almost entirely idle waiting — see
+    `proxypool.concurrency`. The deadline covers the whole fan-out, not each attempt, so this
+    cannot extend an already-slow request beyond its budget.
+    """
+    pool = proxypool.POOL
+    candidates = pool.candidates()[: proxypool.max_attempts()]
+    if not candidates:
+        logger.warning("Proxy rotation is on but the pool is empty; nothing to try")
+        raise RequestBlocked(video_id)
+
+    timeout = proxypool.attempt_timeout()
+    budget = proxypool.deadline_seconds()
+    began = time.monotonic()
+
+    blocked = 0
+    last_blocked: RequestBlocked | None = None
+
+    # Not a `with` block: on success the remaining futures are abandoned rather than waited
+    # on, and `with` would block until every straggler finished its timeout.
+    executor = ThreadPoolExecutor(max_workers=proxypool.concurrency())
+    try:
+        futures = {
+            executor.submit(_attempt, address, video_id, languages, timeout): address
+            for address in candidates
+        }
+        try:
+            for future in as_completed(futures, timeout=budget):
+                address = futures[future]
+                kind, payload = future.result()
+
+                if kind == "ok":
+                    logger.info(
+                        "Proxy %s worked after %.1fs", address, time.monotonic() - began
+                    )
+                    pool.promote(address)
+                    return payload
+                if kind == "definitive":
+                    pool.promote(address)  # it reached YouTube, so it is a good proxy
+                    raise payload
+                if kind == "blocked":
+                    blocked += 1
+                    last_blocked = payload
+                pool.demote(address)
+        except FuturesTimeout:
+            logger.warning("Proxy rotation hit its %.0fs deadline for %s", budget, video_id)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    logger.warning(
+        "Proxy rotation exhausted for %s: %d candidate(s), %d blocked, %.1fs elapsed",
+        video_id,
+        len(candidates),
+        blocked,
+        time.monotonic() - began,
+    )
+    # Re-raise a real RequestBlocked so the caller's handling is unchanged: this still ends up
+    # as BlockedError -> 503, which is the honest outcome. Rotation reduces how often that
+    # happens; it does not change what it means.
+    raise last_blocked or RequestBlocked(video_id)
+
+
 def extract_youtube(url: str, languages: tuple[str, ...] = ("en",)) -> Document:
     video_id = youtube_video_id(url)
 
     try:
-        fetched = YouTubeTranscriptApi(proxy_config=_proxy_config()).fetch(
-            video_id, languages=languages
-        )
+        fetched = _fetch_transcript(video_id, languages)
     except (TranscriptsDisabled, NoTranscriptFound) as exc:
         raise NoCaptionsError(
             f"No captions available for {url} in languages {list(languages)}. "

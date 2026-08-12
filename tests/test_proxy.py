@@ -23,6 +23,11 @@ PROXY_VARS = (
     "WEBSHARE_PROXY_PASSWORD",
     "YOUTUBE_PROXY_HTTP_URL",
     "YOUTUBE_PROXY_HTTPS_URL",
+    # Rotation too: with it on, a "blocked" test would start walking a real proxy list over
+    # the network instead of asserting on the mapping.
+    "YOUTUBE_PROXY_ROTATE",
+    "YOUTUBE_PROXY_LIST",
+    "YOUTUBE_PROXY_LIST_URL",
 )
 
 VIDEO_URL = "https://www.youtube.com/watch?v=3RwUIP9pMSo"
@@ -97,9 +102,11 @@ class _StubApi:
     """Stands in for YouTubeTranscriptApi, recording what it was constructed with."""
 
     last_proxy_config = "not-set"
+    last_http_client = "not-set"
 
-    def __init__(self, proxy_config=None):
+    def __init__(self, proxy_config=None, http_client=None):
         type(self).last_proxy_config = proxy_config
+        type(self).last_http_client = http_client
         self._proxy_config = proxy_config
 
     def fetch(self, video_id, languages=("en",)):

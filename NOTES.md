@@ -655,9 +655,114 @@ rendered in the browser against a stubbed response and reads correctly.
 paths have never made a real proxied request. The code path is tested with stubs; the
 end-to-end "does a residential proxy actually get past YouTube" question is open.
 
-Worth saying plainly: **YouTube is broken on the deployed site until a proxy is configured.**
-Articles work. The two saved examples work. That is a product limitation of hosting on any
-cloud provider, not a bug in this code.
+~~Worth saying plainly: **YouTube is broken on the deployed site until a proxy is
+configured.**~~ Addressed by proxy rotation below, without paying for anything.
+
+### Proxy rotation — measured before, during, and after
+
+Before building anything, 92 proxies from the default free list were tested against a real
+transcript fetch, because "free proxies won't work" was an assumption worth checking:
+
+| | count |
+|---|---|
+| Sampled | 92 |
+| Could reach YouTube at all | 11 |
+| ...blocked by YouTube | 5 |
+| ...proxy itself failed | 4 |
+| **...fetched the transcript** | **2** |
+
+**A ~2% hit rate is the number the design has to survive.** It rules out the obvious approach:
+pointing `YOUTUBE_PROXY_HTTPS_URL` at one free proxy gives a site that works until that IP
+dies and then fails silently. It also says a working proxy is worth remembering, since finding
+one costs many attempts.
+
+An earlier claim in this conversation that free datacenter proxies simply would not work was
+wrong — some do. The block is per-IP reputation, not a blanket ban on datacenter ranges.
+
+**First implementation was sequential**, 8 attempts inside a 45s budget. Live result: **1 of 3
+cold starts succeeded, 35-50s each.** Also observed: a proxy promoted as known-good failed on
+the very next request seconds later, which is the churn rate this has to tolerate.
+
+**Making the attempts concurrent is what fixed it.** Almost all of an attempt is idle waiting
+on a dead proxy, and attempts are independent, so parallelism fits several times as many
+candidates into the same budget:
+
+| | origin IP | cold-start success | time |
+|---|---|---|---|
+| 1 at a time, 8 candidates | not blocked | 1 / 3 | 35-50s |
+| 6 at a time, 24 candidates | not blocked | 6 / 6 | median 10.9s |
+| 6 at a time, 24 candidates | **blocked** | 0 / 1 | 9.4s |
+| **6 at a time, 40 candidates** | **blocked** | **4 / 5** | 4-29s |
+
+Defaults come from the last row: 40 candidates, 6 concurrent, 5s per attempt, 60s total. A
+larger pool costs nothing when a proxy is found early and only spends the full budget on the
+way to failing — where there is no model call to pay for afterwards anyway.
+
+### Testing this blocked my own IP, which turned out to be useful
+
+Enough transcript fetches during the work above got **this machine** blocked by YouTube
+(`IpBlocked`). Two consequences:
+
+- `tests/test_extract.py` now fails here on the two live YouTube cases. That is environmental,
+  not a regression — the failure is `IpBlocked`, and the article cases still pass. It should
+  clear on its own. Worth knowing before anyone panics at a red suite.
+- It closed a gap this file had listed as unverified. **The full direct-then-rotate path has
+  now been exercised from a genuinely blocked origin**, not just via stubs:
+
+```
+INFO: Direct fetch blocked for 3RwUIP9pMSo; rotating through the proxy pool
+INFO: Proxy pool loaded 400 candidates
+WARNING: Proxy rotation exhausted: 24 candidate(s), 4 blocked, 9.4s elapsed
+BlockedError: YouTube is blocking requests from this server ... (IpBlocked)
+```
+
+Direct attempt, block detected, rotation entered, budget respected, and a `BlockedError` that
+becomes the 503 the front end explains. That run found no working proxy, which is what
+motivated raising the defaults; the re-measurement at 40 candidates then succeeded 4 times in
+5 **from that same blocked IP** — which also confirms the proxies are doing real work rather
+than quietly forwarding the origin address.
+
+**Design decisions worth recording:**
+
+- **Rotation only triggers on `RequestBlocked`, after a direct attempt.** A direct connection
+  is what works locally and costs one request to rule out. Crucially, a video-level failure
+  (`NoTranscriptFound`, `TranscriptsDisabled`, `VideoUnavailable`) stops rotation immediately
+  — all four exceptions share the `CouldNotRetrieveTranscript` base, so clause ordering is
+  load-bearing, and without it a captionless video would burn 24 proxies to be told the same
+  thing 24 times. There is a test pinning this.
+- **A deadline, not just an attempt count.** `/ingest` is synchronous and already slow; the
+  bound that matters is wall-clock, so the attempt cap is only a backstop.
+- **A per-request timeout had to be added.** requests has no global timeout and
+  youtube-transcript-api never passes one, so a proxy that accepts a connection and goes quiet
+  would hang forever — the normal behaviour of a dead free proxy. `_TimeoutSession` supplies
+  one. Rotation is worthless without it.
+- **The last working proxy is tried first; the rest are shuffled.** The source list is public,
+  so its head is the most hammered; shuffling spreads the load and improves the odds.
+- **A win stops the waiting, not the submitting.** Candidates are submitted up front, so a few
+  already-running attempts finish after a success and are discarded. Bounded by the timeout,
+  and it is why the tests assert membership rather than "the winner was tried last" — one test
+  originally asserted the stricter thing and was wrong, not the code.
+- **Off by default in code, on in `app.yaml`.** Routing traffic through unvetted third-party
+  proxies should be an explicit choice; it is enabled for this deployment because the
+  alternative is YouTube not working at all. `YOUTUBE_PROXY_ROTATE: "0"` turns it off.
+- **An unreachable proxy list degrades to "no rotation"**, never to a failed request.
+
+**Verified:** `495 passed` (28 in `tests/test_proxy_rotation.py`), stable across three full
+runs — ordering tests pin `YOUTUBE_PROXY_CONCURRENCY=1`, and separate tests cover the parallel
+path. The live measurements above were run against the real list and a real video.
+
+**Not verified / known limits:**
+
+1. **All measurements are small samples at one moment.** The proxy list churns every 30
+   minutes and YouTube's blocking moves. Results ranged from 0/1 to 6/6 within an hour on the
+   same code. Treat "usually works, sometimes doesn't" as the honest summary, not a rate.
+2. ~~**Never run from an actually-blocked host.**~~ **Closed** — see above; the full path ran
+   from a real `IpBlocked` origin. Still never run from Wasmer Edge itself.
+3. **The paid Webshare path still has no live test** — no proxy has been bought.
+4. **A hostile proxy could serve a doctored transcript.** In practice TLS to YouTube prevents
+   tampering, and no credentials traverse the proxy, but the trust model is worth stating.
+5. Scraping transcripts is against YouTube's terms of service, and routing around an IP block
+   is squarely within that. Recorded as a fact about the approach, not a code issue.
 
 ### One pre-existing risk that this change makes worse
 

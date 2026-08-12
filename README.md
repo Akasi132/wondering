@@ -100,8 +100,23 @@ your laptop returns `RequestBlocked` from Edge, and the site answers **503** wit
 blocking this server" — the link was never the problem. **Articles are unaffected**, and so are
 the two saved examples.
 
-To make YouTube work, point the instance at a *residential* proxy (datacenter proxies are
-blocked for the same reason the host is):
+There are two ways around it, and `app.yaml` enables the free one by default.
+
+**Free: rotation over a public proxy list** (`YOUTUBE_PROXY_ROTATE: "1"`). After a direct
+attempt comes back blocked, the app pulls a list of free proxies and tries a batch of them in
+parallel, keeping whichever works. Measured on 2026-08-11:
+
+| | cold-start success | time |
+|---|---|---|
+| One proxy at a time, 8 attempts | 1 of 3 | 35–50s |
+| **6 at a time, 24 candidates** | **6 of 6** | **median 10.9s** |
+
+Concurrency is the whole trick — almost all of an attempt is idle waiting on a dead proxy.
+It is still best-effort: free proxies die constantly, and a proxy that worked a minute ago
+often does not. Set `YOUTUBE_PROXY_ROTATE: "0"` to turn it off, which is a reasonable call
+given it routes requests through third parties nobody has vetted.
+
+**Dependable: a paid residential proxy.** Takes precedence over rotation when set:
 
 ```bash
 wasmer app secret create --app wondering WEBSHARE_PROXY_USERNAME ...
@@ -110,8 +125,9 @@ wasmer app secret create --app wondering WEBSHARE_PROXY_PASSWORD ...
 wasmer app secret create --app wondering YOUTUBE_PROXY_HTTPS_URL https://user:pw@host:port
 ```
 
-Webshare takes precedence if both are set. Unset means no proxy, which is what you want
-locally. This has been tested with stubs but never against a real proxy — see `NOTES.md`.
+Buy *residential* proxies — datacenter ones are blocked for the same reason the host is. This
+path is stub-tested only; no paid proxy has been configured. Unset all of it locally, where a
+direct connection works.
 
 ### Secrets
 
@@ -138,8 +154,12 @@ logged and does not fail the request, so a misconfigured volume degrades rather 
 .venv/Scripts/python -m pytest tests/ -q
 ```
 
-452 tests. Only `tests/test_extract.py` touches the network; the LLM suites stub the clients
-and `tests/test_api.py` stubs DNS so no test can reach a resolver.
+495 tests. Only `tests/test_extract.py` touches the network; the LLM and proxy suites stub
+their clients, and `tests/test_api.py` stubs DNS so no test can reach a resolver.
+
+If the two live YouTube cases in `tests/test_extract.py` fail with `IpBlocked`, your IP is
+rate-limited by YouTube — usually from running them repeatedly. It clears on its own. Skip
+them with `--ignore=tests/test_extract.py` to check everything else.
 
 ## What is and isn't verified
 

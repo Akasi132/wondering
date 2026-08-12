@@ -42,6 +42,16 @@ env:
   # directory is not a durable place to write.
   WONDERING_CACHE_DIR: /data/cache
 
+  # Rotate through free proxies when YouTube blocks this host. Without it, every YouTube URL
+  # on the deployed site returns 503; with it, 6 of 6 cold-start attempts succeeded in
+  # testing, median ~11s (NOTES.md has the method). Only kicks in after a direct attempt is
+  # refused, and only for YouTube — articles never touch it.
+  #
+  # Set to "0" to turn it off. Doing so is reasonable: it routes transcript requests through
+  # third-party proxies nobody has vetted. A paid residential proxy via WEBSHARE_PROXY_* is
+  # the dependable alternative and takes precedence over this when configured.
+  YOUTUBE_PROXY_ROTATE: "1"
+
 # Without this, every request regenerates from scratch and pays the model cost again.
 volumes:
   - name: data
